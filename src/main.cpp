@@ -157,6 +157,7 @@ uint8_t getFingerprintEnroll(uint8_t id) {
   Serial.println(id);
   while (p != FINGERPRINT_OK) {
     p = finger_scanner.getImage();
+    delay(2000);
     switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
@@ -212,6 +213,7 @@ uint8_t getFingerprintEnroll(uint8_t id) {
   Serial.println("Place same finger again");
   while (p != FINGERPRINT_OK) {
     p = finger_scanner.getImage();
+    delay(2000);
     switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
@@ -316,7 +318,7 @@ uint8_t getFingerprintID() {
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
-      Serial.println("No finger detected");
+      Serial.println("No Finger detected");
       return p;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -380,13 +382,15 @@ uint8_t getFingerprintID() {
  
 void enrollFinger() {
     Serial.print("\n[i] Ready to enroll a fingerprint.");
-    uint8_t id = client.read();
+    String string_id = client.readStringUntil('\n');
+    uint8_t id = string_id.toInt();
     while (!getFingerprintEnroll(id));
 }
 
 
 void scanFinger() {
   getFingerprintID();
+  delay(50);
 }
 
 
@@ -428,18 +432,18 @@ void loop() {
     if (client.available()) {
         message = client.readStringUntil('\n');
 
-        if (message.equals("disconnect")) {
+        if (message == "disconnect") {
             disconnectFromServer();
         }
 
-        else if (message.equals("reboot")) {
+        else if (message == "reboot") {
             disconnectFromServer();
             WiFi.disconnect();
             delay(50);
             ESP.restart();
         }
 
-        else if (message.equals("enroll")) {
+        else if (message == "enroll") {
             enrollFinger();
         }
     }
@@ -448,6 +452,5 @@ void loop() {
     if (is_connected) {
       scanFinger();
     }
-
     discon_btn_old_state = discon_btn_state;
 }
