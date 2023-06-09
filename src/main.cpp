@@ -27,19 +27,74 @@
 #include "LiquidCrystal_I2C.h"
 #include "string.h"
 
-#define DISCON 13 // d7
-#define FINGER_RX 14 // d5
-#define FINGER_TX 12 // d6
+#define DISCON    0x0D // d7
+#define FINGER_RX 0x0E // d5
+#define FINGER_TX 0x0C // d6
 
 WiFiClient client;
 SoftwareSerial s_serial(FINGER_RX, FINGER_TX);
 Adafruit_Fingerprint finger_scanner = Adafruit_Fingerprint(&s_serial);
-LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 16, 2);
+LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 0x10, 0x02);
 String message;
 int discon_btn_state = 0;
 int discon_btn_old_state = 0;
 bool is_connected = false;
+byte load_state = 0x00;
 
+byte load_0[8] = {
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000
+};
+
+byte load_1[8] = {
+  0b01000,
+  0b01000,
+  0b01000,
+  0b01000,
+  0b01000,
+  0b01000,
+  0b01000,
+  0b01000
+};
+
+byte load_2[8] = {
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100
+};
+
+byte load_3[8] = {
+  0b00010,
+  0b00010,
+  0b00010,
+  0b00010,
+  0b00010,
+  0b00010,
+  0b00010,
+  0b00010,
+};
+
+byte load_4[8] = {
+  0b00001,
+  0b00001,
+  0b00001,
+  0b00001,
+  0b00001,
+  0b00001,
+  0b00001,
+  0b00001
+};
 
 /**
  * Initialize The Fingerprint Scanner.
@@ -57,7 +112,7 @@ void initFingerprintScanner() {
     while (true) {
         if (finger_scanner.verifyPassword()) {
             Serial.print("\n[i] Scanner Found !");
-            finger_scanner.emptyDatabase();
+            finger_scanner.emptyDatabase(); // TODO: Remove this line after prototyping phase.
             break;
         }
         else {
@@ -69,6 +124,19 @@ void initFingerprintScanner() {
 
 
 /**
+ * Display the text to the Liquid Crystal Display.
+ * @param text the text to be displayed. 
+*/
+void displayText(String firstLine, String secondLine) {
+  lcd.setCursor(0, 0);
+  lcd.print(firstLine);
+  lcd.setCursor(0, 1);
+  lcd.print(secondLine);
+  delay(2);
+}
+
+
+/**
  * Initialize the Liquid Crystal Display
 */
 void initLCD() {
@@ -76,8 +144,14 @@ void initLCD() {
     lcd.init();
     lcd.backlight();
 
-    lcd.setCursor(2, 0);
-    lcd.print("Client Start");
+    lcd.createChar(0, load_0);
+    lcd.createChar(1, load_1);
+    lcd.createChar(2, load_2);
+    lcd.createChar(3, load_3);
+    lcd.createChar(4, load_4);
+
+    lcd.setCursor(0, 0);
+    displayText("  Client Start  ", "");
 }
 
 
@@ -90,6 +164,7 @@ void initLCD() {
 */
 void connectToWiFi() {
     Serial.print("\n[i] Connecting to Wi-Fi");
+    displayText("  Client Start  ", "   conn WiFi   ");
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     while (WiFi.status() != WL_CONNECTED) {
@@ -99,6 +174,7 @@ void connectToWiFi() {
 
     Serial.print("\n[i] Connected to ");
     Serial.print(WiFi.localIP());
+    displayText("  Client Start  ", "   conn WiFi.   ");
 }
 
 
@@ -110,6 +186,7 @@ void connectToWiFi() {
 */
 void connectToServer() {
     Serial.print("\n[i] Connecting to Server");
+    displayText("  Client Start  ", "  conn Server   ");
 
     while (!client.connect(HOST, PORT)) {
         delay(1000);
@@ -118,7 +195,8 @@ void connectToServer() {
 
     Serial.print("\n[i] Connected !");
     is_connected = true;
-    client.print("Hello From NodeMCU client :)\n");
+    client.print("Client connected successfully. // Hello Server // \n");
+    displayText("  Client Start  ", "  conn Server.   ");
 }
 
 
@@ -134,16 +212,8 @@ void disconnectFromServer() {
         client.stop();
         is_connected = false;
         Serial.print("\n[i] Disconnected from server !");
+        displayText("  Disconnected  ", "  please reset  ");
     }
-}
-
-
-/**
- * Display the text to the Liquid Crystal Display.
- * @param text the text to be displayed. 
-*/
-void displayText(String text) {
-
 }
 
 
@@ -314,10 +384,44 @@ void sendFinger() {
  * Scan a fingerprint and match it on the database.
 */
 int getFingerprintID() {
+  displayText("  Scan  Finger  ", "                ");
+
+  // Loading animation
+  switch (load_state) {
+    case 0x01:
+      lcd.setCursor(7, 1);
+      lcd.write(0);
+      break;
+    case 0x02:
+      lcd.setCursor(7, 1);
+      lcd.write(1);
+      break;
+    case 0x03:
+      lcd.setCursor(7, 1);
+      lcd.write(2);
+      break;
+    case 0x04:
+      lcd.setCursor(7, 1);
+      lcd.write(3);
+      break;
+    case 0x05:
+      lcd.setCursor(7, 1);
+      lcd.write(4);
+      load_state = 0x00;
+      break;
+  }
+  load_state++;
+  delay(2);
+
+  
   uint8_t p = finger_scanner.getImage();
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
+      lcd.setCursor(0, 0);
+      lcd.print("  Image  taken  ");
+      delay(2);
+      displayText("     Image      ", "     Taken-     ");
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println("No Finger detected");
@@ -362,6 +466,7 @@ int getFingerprintID() {
   p = finger_scanner.fingerSearch();
   if (p == FINGERPRINT_OK) {
     Serial.println("Found a print match!");
+    displayText("  Fingerprint   ", "    is found    ");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return -1;
@@ -420,6 +525,10 @@ void scanFinger() {
   if (fingerprint_id != -1) {
     client.println("scanFinger");
     client.println(fingerprint_id);
+    displayText("    Logging     ", "   Attendance   ");
+    // TODO: to be logged into database, get feedback.
+    displayText("  Successfully  ", "  Logged to DB  ");
+    delay(2000);
   }
   delay(50);
 }
@@ -432,6 +541,7 @@ void setup() {
     Serial.begin(115200);
     Serial.print("\n[i] Starting Client...");
 
+    delay(50);
     initFingerprintScanner();
     delay(50);
     initLCD();
@@ -441,7 +551,10 @@ void setup() {
     connectToServer();
     delay(50);
     pinMode(DISCON, INPUT);
-    
+
+    lcd.setCursor(0, 0);
+    lcd.print("  Scan  Finger  ");
+    delay(2);
 }
 
 
