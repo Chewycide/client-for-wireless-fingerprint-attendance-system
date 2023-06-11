@@ -362,7 +362,7 @@ bool getFingerprintEnroll(uint8_t id) {
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored to internal database");
     displayText("  Sending Data  ", "  to Database   ");
-    delay(100);
+    delay(1000);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return 0;
@@ -524,8 +524,18 @@ void scanFinger() {
     client.println(fingerprint_id);
     displayText("    Logging     ", "   Attendance   ");
     // TODO: to be logged into database, get feedback.
-    displayText("  Successfully  ", "  Logged to DB  ");
-    delay(2000);
+    String feedback = client.readStringUntil('\n');
+    if (feedback == "OK") {
+      displayText("  Successfully  ", "  Logged to DB  ");
+      String attendee_first_name = client.readStringUntil('\n');
+      delay(2000);
+      displayText("                ", "                ");
+      displayText("Welcome:        ", attendee_first_name);
+    }
+    else {
+      displayText(" Failed logging ", "   Attendance   ");
+    }
+    delay(3000);
   }
   delay(50);
 }
