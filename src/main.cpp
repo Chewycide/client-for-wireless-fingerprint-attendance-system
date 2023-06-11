@@ -40,6 +40,7 @@ int discon_btn_state = 0;
 int discon_btn_old_state = 0;
 bool is_connected = false;
 byte sprites_pos[4] = { 0x03, 0x02, 0x01, 0x00 };
+byte scan_mode = 0x00;
 
 byte head_sprite[8] = {
   0b00000,
@@ -121,6 +122,37 @@ void initLCD() {
 
 
 /**
+ * This function updates the animation when waiting for a fingerprint scan.
+*/
+void scanAnimation() {
+  switch (scan_mode) {
+    case 0x00:
+      displayText("Scan Your Finger", "                ");
+      break;
+    case 0x01:
+      displayText(" Enroll  Finger ", "                ");
+      break;
+  }
+  
+  for (int i = 0; i < sizeof(sprites_pos) / sizeof(byte); i++) {
+    if (sprites_pos[i] > 0x0F) {
+      sprites_pos[i] = 0x00;
+    }
+
+    lcd.setCursor(sprites_pos[i], 1);
+    if (i == 0) {
+      lcd.write(0);
+    }
+    else {
+      lcd.write(1);
+    }
+      sprites_pos[i]++;
+  }
+  delay(2);
+}
+
+
+/**
  * Connect the board to a Wi-Fi network.
  * 
  * The board is fixed to a specific SSID and PASS.
@@ -186,16 +218,18 @@ void disconnectFromServer() {
  * Enroll a fingerprint
 */
 bool getFingerprintEnroll(uint8_t id) {
-
-  int p = -1;
   Serial.print("Waiting for valid finger to enroll as #");
   Serial.println(id);
+
+  int p = -1;
   while (p != FINGERPRINT_OK) {
     p = finger_scanner.getImage();
+    scanAnimation();
     delay(2000);
     switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
+      displayText("  Image  Taken  ", " please wait... ");
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println(".");
@@ -213,11 +247,12 @@ bool getFingerprintEnroll(uint8_t id) {
   }
 
   // OK success!
-
+  displayText("   Processing   ", "    Image...    ");
   p = finger_scanner.image2Tz(1);
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image converted");
+      delay(100);
       break;
     case FINGERPRINT_IMAGEMESS:
       Serial.println("Image too messy");
@@ -238,6 +273,8 @@ bool getFingerprintEnroll(uint8_t id) {
 
 
   Serial.println("Remove finger");
+  displayText("      ----      ", " Remove Finger  ");
+  
   delay(2000);
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -246,12 +283,14 @@ bool getFingerprintEnroll(uint8_t id) {
   Serial.print("ID "); Serial.println(id);
   p = -1;
   Serial.println("Place same finger again");
+  displayText("   Place Same   ", "  Finger again  ");
   while (p != FINGERPRINT_OK) {
     p = finger_scanner.getImage();
     delay(2000);
     switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
+      displayText("  Image  Taken  ", " please wait... ");
       break;
     case FINGERPRINT_NOFINGER:
       Serial.print(".");
@@ -270,10 +309,12 @@ bool getFingerprintEnroll(uint8_t id) {
 
 
   // OK success!
+  displayText("   Processing   ", "    Image...    ");
   p = finger_scanner.image2Tz(2);
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image converted");
+      delay(100);
       break;
     case FINGERPRINT_IMAGEMESS:
       Serial.println("Image too messy");
@@ -299,14 +340,18 @@ bool getFingerprintEnroll(uint8_t id) {
   p = finger_scanner.createModel();
   if (p == FINGERPRINT_OK) {
     Serial.println("Prints matched!");
+    displayText("  Fingerprints  ", "    Matched     ");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
+    displayText(" Communication  ", "     Error      ");
     return 0;
   } else if (p == FINGERPRINT_ENROLLMISMATCH) {
     Serial.println("Fingerprints did not match");
+    displayText("  Fingerprints  ", " Did Not Match  ");
     return 0;
   } else {
     Serial.println("Unknown error");
+    displayText("    Unknown     ", "     Error      ");
     return 0;
   }
 
@@ -315,7 +360,9 @@ bool getFingerprintEnroll(uint8_t id) {
   Serial.println(id);
   p = finger_scanner.storeModel(id);
   if (p == FINGERPRINT_OK) {
-    Serial.println("Stored!");
+    Serial.println("Stored to internal database");
+    displayText("  Sending Data  ", "  to Database   ");
+    delay(100);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return 0;
@@ -353,7 +400,7 @@ int getFingerprintID() {
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
-      displayText("     Image      ", "     Taken-     ");
+      displayText("  Image  Taken  ", " please wait... ");
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println("No Finger detected");
@@ -425,7 +472,9 @@ int getFingerprintID() {
 
  
 void enrollFinger() {
+    scan_mode = 0x01;
     Serial.print("\n[i] Ready to enroll a fingerprint.");
+    displayText("   Enrollment   ", "      Mode      ");
     String finger_id_unparsed = client.readStringUntil('\n');
     String first_name = client.readStringUntil('\n');
     String middle_name = client.readStringUntil('\n');
@@ -454,10 +503,21 @@ void enrollFinger() {
     client.println(address);
     delay(30);
     client.println(id);
+
+    displayText(" Waiting for  ", "  Feedback...   ");
+    String feedback = client.readStringUntil('\n');
+    if (feedback == "OK") {
+      displayText("   Enrollment   ", "    Success!    ");
+    }
+    else {
+      displayText("  Enroll Fail!  ", "   Try  Again   ");
+    }
+    delay(2000);
 }
 
 
 void scanFinger() {
+  scan_mode = 0x00;
   int fingerprint_id = getFingerprintID();
   if (fingerprint_id != -1) {
     client.println("scanFinger");
@@ -468,29 +528,6 @@ void scanFinger() {
     delay(2000);
   }
   delay(50);
-}
-
-
-/**
- * This function updates the animation when waiting for a fingerprint scan.
-*/
-void scanAnimation() {
-  displayText("Scan Your Finger", "                ");
-  for (int i = 0; i < sizeof(sprites_pos) / sizeof(byte); i++) {
-    if (sprites_pos[i] > 0x0F) {
-      sprites_pos[i] = 0x00;
-    }
-
-    lcd.setCursor(sprites_pos[i], 1);
-    if (i == 0) {
-      lcd.write(0);
-    }
-    else {
-      lcd.write(1);
-    }
-      sprites_pos[i]++;
-  }
-  delay(2);
 }
 
 
