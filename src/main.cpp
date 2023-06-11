@@ -39,62 +39,30 @@ String message;
 int discon_btn_state = 0;
 int discon_btn_old_state = 0;
 bool is_connected = false;
-byte load_state = 0x00;
+byte sprites_pos[4] = { 0x03, 0x02, 0x01, 0x00 };
 
-byte load_0[8] = {
-  0b10000,
-  0b10000,
-  0b10000,
-  0b10000,
-  0b10000,
-  0b10000,
-  0b10000,
-  0b10000
+byte head_sprite[8] = {
+  0b00000,
+  0b00000,
+  0b01110,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b01110,
+  0b00000
 };
 
-byte load_1[8] = {
-  0b01000,
-  0b01000,
-  0b01000,
-  0b01000,
-  0b01000,
-  0b01000,
-  0b01000,
-  0b01000
+byte tail_sprite[8] = {
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00100,
+  0b01110,
+  0b00100,
+  0b00000,
+  0b00000
 };
 
-byte load_2[8] = {
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100
-};
-
-byte load_3[8] = {
-  0b00010,
-  0b00010,
-  0b00010,
-  0b00010,
-  0b00010,
-  0b00010,
-  0b00010,
-  0b00010,
-};
-
-byte load_4[8] = {
-  0b00001,
-  0b00001,
-  0b00001,
-  0b00001,
-  0b00001,
-  0b00001,
-  0b00001,
-  0b00001
-};
 
 /**
  * Initialize The Fingerprint Scanner.
@@ -144,11 +112,8 @@ void initLCD() {
     lcd.init();
     lcd.backlight();
 
-    lcd.createChar(0, load_0);
-    lcd.createChar(1, load_1);
-    lcd.createChar(2, load_2);
-    lcd.createChar(3, load_3);
-    lcd.createChar(4, load_4);
+    lcd.createChar(0, head_sprite);
+    lcd.createChar(1, tail_sprite);
 
     lcd.setCursor(0, 0);
     displayText("  Client Start  ", "");
@@ -384,43 +349,10 @@ void sendFinger() {
  * Scan a fingerprint and match it on the database.
 */
 int getFingerprintID() {
-  displayText("  Scan  Finger  ", "                ");
-
-  // Loading animation
-  switch (load_state) {
-    case 0x01:
-      lcd.setCursor(7, 1);
-      lcd.write(0);
-      break;
-    case 0x02:
-      lcd.setCursor(7, 1);
-      lcd.write(1);
-      break;
-    case 0x03:
-      lcd.setCursor(7, 1);
-      lcd.write(2);
-      break;
-    case 0x04:
-      lcd.setCursor(7, 1);
-      lcd.write(3);
-      break;
-    case 0x05:
-      lcd.setCursor(7, 1);
-      lcd.write(4);
-      load_state = 0x00;
-      break;
-  }
-  load_state++;
-  delay(2);
-
-  
   uint8_t p = finger_scanner.getImage();
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
-      lcd.setCursor(0, 0);
-      lcd.print("  Image  taken  ");
-      delay(2);
       displayText("     Image      ", "     Taken-     ");
       break;
     case FINGERPRINT_NOFINGER:
@@ -440,9 +372,11 @@ int getFingerprintID() {
 
   // OK success!
   p = finger_scanner.image2Tz();
+  displayText("   Processing   ", "    Image...    ");
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image converted");
+      delay(100);
       break;
     case FINGERPRINT_IMAGEMESS:
       Serial.println("Image too messy");
@@ -467,11 +401,14 @@ int getFingerprintID() {
   if (p == FINGERPRINT_OK) {
     Serial.println("Found a print match!");
     displayText("  Fingerprint   ", "    is found    ");
+    delay(1000);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return -1;
   } else if (p == FINGERPRINT_NOTFOUND) {
     Serial.println("Did not find a match");
+    displayText("  Did not Find  ", "     Match      ");
+    delay(1000);
     return -1;
   } else {
     Serial.println("Unknown error");
@@ -531,6 +468,29 @@ void scanFinger() {
     delay(2000);
   }
   delay(50);
+}
+
+
+/**
+ * This function updates the animation when waiting for a fingerprint scan.
+*/
+void scanAnimation() {
+  displayText("Scan Your Finger", "                ");
+  for (int i = 0; i < sizeof(sprites_pos) / sizeof(byte); i++) {
+    if (sprites_pos[i] > 0x0F) {
+      sprites_pos[i] = 0x00;
+    }
+
+    lcd.setCursor(sprites_pos[i], 1);
+    if (i == 0) {
+      lcd.write(0);
+    }
+    else {
+      lcd.write(1);
+    }
+      sprites_pos[i]++;
+  }
+  delay(2);
 }
 
 
@@ -595,6 +555,7 @@ void loop() {
     // check if the client is still connected to a server before scanning finger.
     if (is_connected) {
       scanFinger();
+      scanAnimation();
     }
     discon_btn_old_state = discon_btn_state;
 }
