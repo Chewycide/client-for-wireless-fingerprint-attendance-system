@@ -591,6 +591,8 @@ void loop() {
             disconnectFromServer();
             WiFi.disconnect();
             delay(50);
+            displayText("      ----      ", "  Rebooting...  ");
+            delay(1000);
             ESP.restart();
         }
 
