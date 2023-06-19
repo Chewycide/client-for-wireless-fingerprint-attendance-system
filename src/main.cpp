@@ -36,6 +36,13 @@ SoftwareSerial s_serial(FINGER_RX, FINGER_TX);
 Adafruit_Fingerprint finger_scanner = Adafruit_Fingerprint(&s_serial);
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 0x10, 0x02);
 String message;
+
+unsigned long currentTime = 0;
+unsigned long animInterval = 50;
+unsigned long animPreviousTime = 0;
+unsigned long enrollPrevousTime = 0;
+unsigned long loginPreviousTime = 0;
+
 int discon_btn_state = 0;
 int discon_btn_old_state = 0;
 bool is_connected = false;
@@ -125,30 +132,33 @@ void initLCD() {
  * This function updates the animation when waiting for a fingerprint scan.
 */
 void scanAnimation() {
-	switch (scan_mode) {
-		case 0x00:
-		displayText("Scan Your Finger", "                ");
-		break;
-		case 0x01:
-		displayText(" Enroll  Finger ", "                ");
-		break;
-	}
-	
-	for (int i = 0; i < sizeof(sprites_pos) / sizeof(byte); i++) {
-		if (sprites_pos[i] > 0x0F) {
-		sprites_pos[i] = 0x00;
+	if (currentTime - animPreviousTime >= animInterval) {
+		switch (scan_mode) {
+			case 0x00:
+			displayText("Scan Your Finger", "                ");
+			break;
+			case 0x01:
+			displayText(" Enroll  Finger ", "                ");
+			break;
+		}
+		
+		for (int i = 0; i < sizeof(sprites_pos) / sizeof(byte); i++) {
+			if (sprites_pos[i] > 0x0F) {
+			sprites_pos[i] = 0x00;
+			}
+
+			lcd.setCursor(sprites_pos[i], 1);
+			if (i == 0) {
+			lcd.write(0);
+			}
+			else {
+			lcd.write(1);
+			}
+			sprites_pos[i]++;
 		}
 
-		lcd.setCursor(sprites_pos[i], 1);
-		if (i == 0) {
-		lcd.write(0);
-		}
-		else {
-		lcd.write(1);
-		}
-		sprites_pos[i]++;
+		animPreviousTime = currentTime;
 	}
-	delay(2);
 }
 
 
@@ -222,27 +232,33 @@ bool getFingerprintEnroll(uint8_t id) {
 	Serial.println(id);
 
 	int p = -1;
+	enrollPrevousTime = 0;
 	while (p != FINGERPRINT_OK) {
-		p = finger_scanner.getImage();
+		currentTime = millis();
 		scanAnimation();
-		delay(2000);
-		switch (p) {
-			case FINGERPRINT_OK:
-				Serial.println("Image taken");
-				displayText("  Image  Taken  ", " please wait... ");
-				break;
-			case FINGERPRINT_NOFINGER:
-				Serial.println(".");
-				break;
-			case FINGERPRINT_PACKETRECIEVEERR:
-				Serial.println("Communication error");
-				break;
-			case FINGERPRINT_IMAGEFAIL:
-				Serial.println("Imaging error");
-				break;
-			default:
-				Serial.println("Unknown error");
-				break;
+
+		if (currentTime - enrollPrevousTime >= animInterval) {
+			p = finger_scanner.getImage();
+			switch (p) {
+				case FINGERPRINT_OK:
+					Serial.println("Image taken");
+					displayText("  Image  Taken  ", " please wait... ");
+					break;
+				case FINGERPRINT_NOFINGER:
+					Serial.println(".");
+					break;
+				case FINGERPRINT_PACKETRECIEVEERR:
+					Serial.println("Communication error");
+					break;
+				case FINGERPRINT_IMAGEFAIL:
+					Serial.println("Imaging error");
+					break;
+				default:
+					Serial.println("Unknown error");
+					break;
+			}
+
+			enrollPrevousTime = currentTime;
 		}
 	}
 
@@ -274,19 +290,30 @@ bool getFingerprintEnroll(uint8_t id) {
 
 	Serial.println("Remove finger");
 	displayText("      ----      ", " Remove Finger  ");
-	
-	delay(2000);
+
 	p = 0;
+	enrollPrevousTime = 0;
 	while (p != FINGERPRINT_NOFINGER) {
-		p = finger_scanner.getImage();
+		currentTime = millis();
+		if (currentTime - enrollPrevousTime >= 2000) {
+			p = finger_scanner.getImage();
+			enrollPrevousTime = currentTime;
+		}
 	}
+
 	Serial.print("ID "); Serial.println(id);
 	p = -1;
+	enrollPrevousTime = 0;
 	Serial.println("Place same finger again");
 	displayText("   Place Same   ", "  Finger again  ");
 	while (p != FINGERPRINT_OK) {
-		p = finger_scanner.getImage();
-		delay(2000);
+		currentTime = millis();
+		if (currentTime - enrollPrevousTime >= animInterval) {
+			p = finger_scanner.getImage();
+			enrollPrevousTime = currentTime;
+		}
+
+
 		switch (p) {
 			case FINGERPRINT_OK:
 				Serial.println("Image taken");
@@ -305,6 +332,8 @@ bool getFingerprintEnroll(uint8_t id) {
 				Serial.println("Unknown error");
 				break;
 		}
+
+		enrollPrevousTime = currentTime;
 	}
 
 
@@ -527,27 +556,31 @@ void enrollFinger() {
 
 
 void scanFinger() {
-  	scan_mode = 0x00;
-  	int fingerprint_id = getFingerprintID();
-  	if (fingerprint_id != -1) {
-    	client.println("scanFinger");
-    	client.println(fingerprint_id);
-    	displayText("    Logging     ", "   Attendance   ");
-    	// TODO: to be logged into database, get feedback.
-		String feedback = client.readStringUntil('\n');
-		if (feedback == "OK") {
-			displayText("  Successfully  ", "  Logged to DB  ");
-			String attendee_first_name = client.readStringUntil('\n');
-			delay(2000);
-			displayText("                ", "                ");
-			displayText("Welcome:        ", attendee_first_name);
+	if (currentTime - loginPreviousTime >= animInterval) {
+
+		scan_mode = 0x00;
+		int fingerprint_id = getFingerprintID();
+		if (fingerprint_id != -1) {
+			client.println("scanFinger");
+			client.println(fingerprint_id);
+			displayText("    Logging     ", "   Attendance   ");
+			// TODO: to be logged into database, get feedback.
+			String feedback = client.readStringUntil('\n');
+			if (feedback == "OK") {
+				displayText("  Successfully  ", "  Logged to DB  ");
+				String attendee_first_name = client.readStringUntil('\n');
+				delay(2000);
+				displayText("                ", "                ");
+				displayText("Welcome:        ", attendee_first_name);
+			}
+			else {
+				displayText(" Failed logging ", "   Attendance   ");
+			}
+			delay(3000);
 		}
-		else {
-			displayText(" Failed logging ", "   Attendance   ");
-		}
-		delay(3000);
+		loginPreviousTime = currentTime;
+
 	}
-	delay(50);
 }
 
 
@@ -580,7 +613,7 @@ void setup() {
  * functions related to events. 
 */
 void loop() {
-  
+	currentTime = millis();
     discon_btn_state = digitalRead(DISCON);
     
     // disconnect the client from the server when the disconnect button is clicked.
