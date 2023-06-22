@@ -27,7 +27,6 @@
 #include "LiquidCrystal_I2C.h"
 #include "string.h"
 
-#define DISCON    0x0D // d7
 #define FINGER_RX 0x0E // d5
 #define FINGER_TX 0x0C // d6
 
@@ -42,9 +41,10 @@ unsigned long animInterval = 50;
 unsigned long animPreviousTime = 0;
 unsigned long enrollPrevousTime = 0;
 unsigned long loginPreviousTime = 0;
+unsigned long heartbeatInterval = 5000;
+unsigned long beatPreviousTime = 0;
+unsigned long responseTime = 0;
 
-int discon_btn_state = 0;
-int discon_btn_old_state = 0;
 bool is_connected = false;
 byte sprites_pos[4] = { 0x03, 0x02, 0x01, 0x00 };
 byte scan_mode = 0x00;
@@ -600,7 +600,6 @@ void setup() {
     delay(50);
     connectToServer();
     delay(50);
-    pinMode(DISCON, INPUT);
 
     lcd.setCursor(0, 0);
     lcd.print("  Scan  Finger  ");
@@ -614,14 +613,14 @@ void setup() {
 */
 void loop() {
 	currentTime = millis();
-    discon_btn_state = digitalRead(DISCON);
     
-    // disconnect the client from the server when the disconnect button is clicked.
-    if (discon_btn_state != discon_btn_old_state) {
-        if (discon_btn_state == 1) {
-            disconnectFromServer();
-        }
-    }
+
+	// heartbeat mechanism
+	if (currentTime - beatPreviousTime >= heartbeatInterval) {
+		client.println("beat");
+		beatPreviousTime = currentTime;
+	}
+
 
     // check if there is available data to be read.
     if (client.available()) {
@@ -643,6 +642,18 @@ void loop() {
         else if (message == "enroll") {
             enrollFinger();
         }
+
+		else if (message == "heartbeat") {
+			// do nothing
+			responseTime = millis();
+			Serial.print("\nserver rt(ms) ");
+			Serial.println(responseTime - currentTime);
+		}
+
+		
+		// reset heartbeat
+		currentTime = millis();
+		beatPreviousTime = currentTime;
     }
     
     // check if the client is still connected to a server before scanning finger.
@@ -650,5 +661,4 @@ void loop() {
 		scanFinger();
 		scanAnimation();
 	}
-    discon_btn_old_state = discon_btn_state;
 }
