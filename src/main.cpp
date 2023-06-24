@@ -27,6 +27,7 @@
 #include "LiquidCrystal_I2C.h"
 #include "string.h"
 
+#define CLIENT_ID "client1" // change for different clients
 #define FINGER_RX 0x0E // d5
 #define FINGER_TX 0x0C // d6
 
@@ -202,6 +203,7 @@ void connectToServer() {
 
     Serial.print("\n[i] Connected !");
     is_connected = true;
+	client.println(CLIENT_ID);
     client.print("Client connected successfully. // Hello Server // \n");
     displayText("  Client Start  ", "  conn Server.   ");
 }
