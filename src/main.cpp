@@ -89,7 +89,6 @@ void initFingerprintScanner() {
     while (true) {
         if (finger_scanner.verifyPassword()) {
             Serial.print("\n[i] Scanner Found !");
-            finger_scanner.emptyDatabase(); // TODO: Remove this line after prototyping phase.
             break;
         }
         else {
@@ -586,6 +585,51 @@ void scanFinger() {
 }
 
 
+uint8_t deleteFingerprint(uint8_t id) {
+	uint8_t p = -1;
+	boolean deleteSuccess = false;
+
+	p = finger_scanner.deleteModel(id);
+
+	if (p == FINGERPRINT_OK) {
+		Serial.println("Deleted!");
+		deleteSuccess = true;
+	} 
+	else if (p == FINGERPRINT_PACKETRECIEVEERR) {
+		Serial.println("Communication error");
+	} 
+	else if (p == FINGERPRINT_BADLOCATION) {
+		Serial.println("Could not delete in that location");
+	} 
+	else if (p == FINGERPRINT_FLASHERR) {
+		Serial.println("Error writing to flash");
+	} 
+	else {
+		Serial.print("Unknown error: 0x"); Serial.println(p, HEX);
+	}
+
+
+	if (!deleteSuccess) {
+		displayText("     Delete     ", "      Fail!     ");
+		client.println("deleteFingerFail");
+		return p;
+	}
+
+	displayText("     Delete     ", "    Success!    ");
+	client.println("deleteFingerOk");
+	return p;
+}
+
+
+void deleteUser() {
+	String fingerprint_id_unparsed = client.readStringUntil('\n');
+	uint8_t fingerprint_id = fingerprint_id_unparsed.toInt();
+	Serial.println(fingerprint_id_unparsed);
+
+	deleteFingerprint(fingerprint_id);
+}
+
+
 /**
  * Initialize all connections.
 */
@@ -646,10 +690,21 @@ void loop() {
         }
 
 		else if (message == "heartbeat") {
-			// do nothing
 			responseTime = millis();
 			Serial.print("\nserver rt(ms) ");
 			Serial.println(responseTime - currentTime);
+		}
+
+		else if (message == "delete") {
+			deleteUser();
+			delay(2000);
+		}
+
+		else if (message == "deleteAllDataFromDatabase") {
+			finger_scanner.emptyDatabase();
+			displayText("  ALL DATA IS   ", "    DELETED!    ");
+			client.println("deleteAllDataFromDatabase");
+			delay(2000);
 		}
 
 		
